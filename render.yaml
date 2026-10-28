@@ -1,0 +1,35 @@
+# הגדרת פריסה ל־Render (Blueprint).
+# ב־Render: New → Blueprint → בוחרים את ה־Repository. הערכים עם sync: false יתבקשו בזמן היצירה.
+services:
+  - type: web
+    name: hatzad-haba-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    # התקנה, Build, Prisma Generate, Migrations ו־Seed (סטטוסים בסיסיים + מנהל ראשי)
+    buildCommand: npm run render:build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+      - key: SEED_DEMO_DATA
+        value: "false"
+      - key: APP_TIMEZONE
+        value: Asia/Jerusalem

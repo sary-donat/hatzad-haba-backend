@@ -1,0 +1,214 @@
+// סכמת מסד הנתונים של „הצעד הבא”
+// שמות הטבלאות והעמודות במסד הנתונים כתובים ב־snake_case (בעזרת @map / @@map)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  INSTITUTION_ADMIN
+  STUDENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum InterestLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActionStatus {
+  OPEN
+  DONE
+}
+
+enum NotificationType {
+  APPLICATION_CREATED
+  STATUS_CHANGED
+  ACTION_ADDED
+}
+
+/// מוסדות
+model Institution {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique @db.VarChar(100)
+  city         String?  @db.VarChar(80)
+  contactEmail String?  @map("contact_email") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users    User[]
+  jobRoles JobRole[]
+  statuses ApplicationStatus[]
+
+  @@map("institutions")
+}
+
+/// משתמשים: מנהל ראשי, מנהלי מוסדות ותלמידים
+model User {
+  id             Int            @id @default(autoincrement())
+  fullName       String         @map("full_name") @db.VarChar(100)
+  email          String         @unique @db.VarChar(255)
+  passwordHash   String         @map("password_hash") @db.VarChar(255)
+  role           Role
+  institutionId  Int?           @map("institution_id")
+  approvalStatus ApprovalStatus @default(PENDING) @map("approval_status")
+  approvedById   Int?           @map("approved_by_id")
+  approvedAt     DateTime?      @map("approved_at") @db.Timestamptz(3)
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  institution        Institution?     @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  approvedBy         User?            @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedUsers      User[]           @relation("UserApprovals")
+  applications       Application[]    @relation("ApplicationOwner")
+  createdApps        Application[]    @relation("ApplicationCreator")
+  createdActions     Action[]
+  notifications      Notification[]   @relation("NotificationRecipient")
+  actedNotifications Notification[]   @relation("NotificationActor")
+  desiredJobRoles    StudentJobRole[]
+
+  @@index([institutionId])
+  @@map("users")
+}
+
+/// תחומי תפקיד שמנהל המוסד מגדיר
+model JobRole {
+  id            Int      @id @default(autoincrement())
+  institutionId Int      @map("institution_id")
+  name          String   @db.VarChar(80)
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  institution        Institution      @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  applications       Application[]
+  interestedStudents StudentJobRole[]
+
+  @@unique([institutionId, name])
+  @@map("job_roles")
+}
+
+/// תחומי התפקיד שתלמיד מחפש בהם עבודה (קשר רבים־לרבים בין users ל־job_roles)
+model StudentJobRole {
+  userId    Int      @map("user_id")
+  jobRoleId Int      @map("job_role_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobRole JobRole @relation(fields: [jobRoleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, jobRoleId])
+  @@index([jobRoleId])
+  @@map("user_job_roles")
+}
+
+/// סטטוסים: בסיסיים (institution_id ריק) או של מוסד
+model ApplicationStatus {
+  id              Int      @id @default(autoincrement())
+  institutionId   Int?     @map("institution_id")
+  name            String   @db.VarChar(60)
+  isFinal         Boolean  @default(false) @map("is_final")
+  suggestedAction String?  @map("suggested_action") @db.VarChar(200)
+  suggestedDays   Int?     @map("suggested_days")
+  sortOrder       Int      @default(100) @map("sort_order")
+  isActive        Boolean  @default(true) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  institution  Institution?  @relation(fields: [institutionId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([institutionId, name])
+  @@map("application_statuses")
+}
+
+/// מועמדות של תלמיד למשרה — האובייקט המרכזי במערכת
+model Application {
+  id                   Int            @id @default(autoincrement())
+  userId               Int            @map("user_id")
+  createdById          Int            @map("created_by_id")
+  companyName          String         @map("company_name") @db.VarChar(120)
+  jobTitle             String         @map("job_title") @db.VarChar(120)
+  jobRoleId            Int?           @map("job_role_id")
+  submittedOn          DateTime       @map("submitted_on") @db.Date
+  statusId             Int            @map("status_id")
+  jobUrl               String?        @map("job_url") @db.VarChar(500)
+  contactName          String?        @map("contact_name") @db.VarChar(100)
+  interestLevel        InterestLevel? @map("interest_level")
+  jobAttractions       String?        @map("job_attractions")
+  pointsToClarify      String?        @map("points_to_clarify")
+  notes                String?
+  interviewAt          DateTime?      @map("interview_at") @db.Timestamptz(3)
+  interviewLocation    String?        @map("interview_location") @db.VarChar(300)
+  interviewPreparation String?        @map("interview_preparation")
+  interviewQuestions   String?        @map("interview_questions")
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user          User              @relation("ApplicationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy     User              @relation("ApplicationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  jobRole       JobRole?          @relation(fields: [jobRoleId], references: [id], onDelete: SetNull)
+  status        ApplicationStatus @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  actions       Action[]
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([statusId])
+  @@map("applications")
+}
+
+/// פעולות לביצוע במועמדות
+model Action {
+  id            Int          @id @default(autoincrement())
+  applicationId Int          @map("application_id")
+  title         String       @db.VarChar(200)
+  dueOn         DateTime     @map("due_on") @db.Date
+  status        ActionStatus @default(OPEN)
+  notes         String?
+  completedAt   DateTime?    @map("completed_at") @db.Timestamptz(3)
+  createdById   Int          @map("created_by_id")
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  createdBy   User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([applicationId])
+  @@index([status, dueOn])
+  @@map("actions")
+}
+
+/// התראות לתלמיד על שינויים שמישהו אחר ביצע במועמדויות שלו
+model Notification {
+  id              Int              @id @default(autoincrement())
+  userId          Int              @map("user_id")
+  applicationId   Int              @map("application_id")
+  actorId         Int              @map("actor_id")
+  type            NotificationType
+  title           String           @db.VarChar(120)
+  message         String           @db.VarChar(500)
+  suggestedAction String?          @map("suggested_action") @db.VarChar(200)
+  suggestedDueOn  DateTime?        @map("suggested_due_on") @db.Date
+  isRead          Boolean          @default(false) @map("is_read")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user        User        @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor       User        @relation("NotificationActor", fields: [actorId], references: [id], onDelete: Restrict)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+
+# קובצי סביבה עם סודות
+.env
+.env.*
+!.env.example
+
+# קבצים זמניים
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,4101 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "הצעד הבא — API",
+    "version": "1.0.0",
+    "description": "שרת למערכת מעקב מועמדויות לעבודה.\n\n**איך בודקים נתיבים מוגנים:**\n1. פותחים את `POST /api/auth/login`, לוחצים **Try it out**, בוחרים דוגמה ולוחצים **Execute**.\n2. מעתיקים את הערך של `token` מהתשובה (בלי המירכאות).\n3. לוחצים על הכפתור **Authorize** למעלה, מדביקים את ה־Token ולוחצים **Authorize**.\n4. מעכשיו כל קריאה תישלח עם `Authorization: Bearer <token>`.\n\nבלי Token מוחזר **401**. עם Token של תפקיד שאינו מורשה מוחזר **403**."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "השרת הנוכחי"
+    }
+  ],
+  "tags": [
+    {
+      "name": "כללי"
+    },
+    {
+      "name": "התחברות"
+    },
+    {
+      "name": "מוסדות"
+    },
+    {
+      "name": "משתמשים"
+    },
+    {
+      "name": "תחומי תפקיד"
+    },
+    {
+      "name": "סטטוסים"
+    },
+    {
+      "name": "מועמדויות"
+    },
+    {
+      "name": "פעולות"
+    },
+    {
+      "name": "מסך הבית"
+    },
+    {
+      "name": "התראות"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "כללי"
+        ],
+        "summary": "בדיקת בריאות השרת",
+        "description": "בודק שהשרת פועל ושיש חיבור למסד הנתונים.\n\n**הרשאה:** ציבורי",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "השרת ומסד הנתונים תקינים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "status": "ok",
+                  "database": "ok",
+                  "uptimeSeconds": 120,
+                  "responseMs": 3,
+                  "time": "2026-10-19T08:00:00.000Z"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "אין חיבור למסד הנתונים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                },
+                "example": {
+                  "status": "error",
+                  "database": "unavailable"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "התחברות"
+        ],
+        "summary": "הרשמת תלמיד",
+        "description": "יוצר חשבון תלמיד במוסד שנבחר. החשבון ממתין לאישור מנהל המוסד, ולכן לא מוחזר Token.\n\n**הרשאה:** ציבורי",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "ההרשמה התקבלה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "ההרשמה התקבלה. החשבון ממתין לאישור מנהל המוסד",
+                  "user": {
+                    "id": 7,
+                    "fullName": "נועה ישראלי",
+                    "email": "noa@example.com",
+                    "role": "STUDENT",
+                    "approvalStatus": "PENDING",
+                    "isActive": true,
+                    "institution": {
+                      "id": 1,
+                      "name": "מכללת אופק"
+                    },
+                    "desiredJobRoles": [
+                      {
+                        "id": 1,
+                        "name": "תכנות",
+                        "isActive": true
+                      }
+                    ],
+                    "approvedAt": null,
+                    "createdAt": "2026-10-01T07:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "התחברות"
+        ],
+        "summary": "כניסה למערכת",
+        "description": "מחזיר JWT. כדי להשתמש בו ב־Swagger: מעתיקים את הערך token, לוחצים על Authorize ומדביקים אותו.\n\n**הרשאה:** ציבורי\n\n403 מוחזר עם קוד ACCOUNT_PENDING כשהחשבון ממתין לאישור, או ACCOUNT_REJECTED כשההרשמה נדחתה.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              },
+              "examples": {
+                "student": {
+                  "summary": "תלמידה — נתוני הדגמה מקומיים (בענן: הסיסמה מ־DEMO_PASSWORD)",
+                  "value": {
+                    "email": "dana@example.com",
+                    "password": "Student1234!"
+                  }
+                },
+                "institutionAdmin": {
+                  "summary": "מנהלת מוסד — נתוני הדגמה מקומיים (בענן: הסיסמה מ־DEMO_PASSWORD)",
+                  "value": {
+                    "email": "ronit@example.com",
+                    "password": "Admin1234!"
+                  }
+                },
+                "superAdmin": {
+                  "summary": "מנהל ראשי — הפרטים שהוגדרו ב־SUPER_ADMIN_EMAIL ו־SUPER_ADMIN_PASSWORD",
+                  "value": {
+                    "email": "super@example.com",
+                    "password": "הסיסמה-שהגדרתם"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "התחברות הצליחה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "התחברות"
+        ],
+        "summary": "פרטי המשתמש המחובר",
+        "description": "מחזיר את המשתמש לפי ה־Token.\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "פרטי המשתמש",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "user": {
+                    "id": 3,
+                    "fullName": "דנה כהן",
+                    "email": "dana@example.com",
+                    "role": "STUDENT",
+                    "approvalStatus": "APPROVED",
+                    "isActive": true,
+                    "institution": {
+                      "id": 1,
+                      "name": "מכללת אופק"
+                    },
+                    "desiredJobRoles": [
+                      {
+                        "id": 1,
+                        "name": "תכנות",
+                        "isActive": true
+                      }
+                    ],
+                    "approvedAt": "2026-10-01T08:00:00.000Z",
+                    "createdAt": "2026-10-01T07:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/auth/me/job-roles": {
+      "put": {
+        "tags": [
+          "התחברות"
+        ],
+        "summary": "עדכון התחומים שאני מחפש בהם עבודה",
+        "description": "שולחים את כל רשימת התחומים — היא מחליפה את הקודמת. רק תחומים פעילים של המוסד שלי.\n\n**הרשאה:** תלמיד בלבד",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMyJobRolesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "עודכן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                },
+                "example": {
+                  "user": {
+                    "id": 3,
+                    "fullName": "דנה כהן",
+                    "email": "dana@example.com",
+                    "role": "STUDENT",
+                    "approvalStatus": "APPROVED",
+                    "isActive": true,
+                    "institution": {
+                      "id": 1,
+                      "name": "מכללת אופק"
+                    },
+                    "desiredJobRoles": [
+                      {
+                        "id": 1,
+                        "name": "תכנות",
+                        "isActive": true
+                      }
+                    ],
+                    "approvedAt": "2026-10-01T08:00:00.000Z",
+                    "createdAt": "2026-10-01T07:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/institutions/{id}/job-roles": {
+      "get": {
+        "tags": [
+          "מוסדות"
+        ],
+        "summary": "תחומי התפקיד הפעילים של מוסד (לטופס ההרשמה)",
+        "description": "מזהה ושם בלבד.\n\n**הרשאה:** ציבורי",
+        "security": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המוסד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת תחומי תפקיד",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Ref"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": 1,
+                      "name": "תכנות"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/institutions/public": {
+      "get": {
+        "tags": [
+          "מוסדות"
+        ],
+        "summary": "רשימת מוסדות לטופס ההרשמה",
+        "description": "מזהה, שם ועיר בלבד.\n\n**הרשאה:** ציבורי",
+        "security": [],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "חיפוש לפי שם המוסד או העיר",
+            "schema": {
+              "type": "string"
+            },
+            "example": "אופק"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת מוסדות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicInstitution"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": 1,
+                      "name": "מכללת אופק",
+                      "city": "ירושלים"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          }
+        }
+      }
+    },
+    "/api/institutions": {
+      "get": {
+        "tags": [
+          "מוסדות"
+        ],
+        "summary": "רשימת מוסדות עם מספר משתמשים",
+        "description": "\n\n**הרשאה:** מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "חיפוש לפי שם או עיר",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת מוסדות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/InstitutionWithCounts"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "מוסדות"
+        ],
+        "summary": "יצירת מוסד",
+        "description": "השם חובה. עיר ודוא״ל ליצירת קשר — רשות.\n\n**הרשאה:** מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInstitutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "המוסד נוצר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "institution": {
+                      "$ref": "#/components/schemas/Institution"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/institutions/{id}": {
+      "patch": {
+        "tags": [
+          "מוסדות"
+        ],
+        "summary": "עריכת פרטי מוסד",
+        "description": "עדכון שם, עיר או דוא״ל ליצירת קשר.\n\n**הרשאה:** מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המוסד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstitutionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "המוסד עודכן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "institution": {
+                      "$ref": "#/components/schemas/Institution"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "get": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "רשימת משתמשים",
+        "description": "מנהל מוסד רואה רק את התלמידים של המוסד שלו. מנהל ראשי רואה את כולם.\n\n**הרשאה:** מנהל מוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "חיפוש לפי שם או דוא״ל",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי תפקיד",
+            "schema": {
+              "$ref": "#/components/schemas/Role"
+            }
+          },
+          {
+            "name": "institutionId",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי מוסד",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "isActive",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי פעיל / מושבת",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "approvalStatus",
+            "in": "query",
+            "required": false,
+            "description": "למשל PENDING — תלמידים שממתינים לאישור",
+            "schema": {
+              "$ref": "#/components/schemas/ApprovalStatus"
+            },
+            "example": "PENDING"
+          },
+          {
+            "name": "jobRoleId",
+            "in": "query",
+            "required": false,
+            "description": "תלמידים שמחפשים עבודה בתחום הזה",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "מספר העמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "כמה פריטים בעמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת משתמשים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/User"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "example": 20
+                    },
+                    "total": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "example": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "יצירת מנהל מוסד (או תלמיד)",
+        "description": "החשבון נוצר מאושר ופעיל. אי אפשר ליצור מנהל ראשי נוסף.\n\n**הרשאה:** מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "המשתמש נוצר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/users/{id}": {
+      "get": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "פרטי משתמש",
+        "description": "\n\n**הרשאה:** מנהל מוסד (תלמידי המוסד), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המשתמש",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "פרטי המשתמש",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "עדכון שם, השבתה או הפעלה",
+        "description": "משתמש מושבת אינו יכול להתחבר, וה־Token שלו מפסיק לעבוד מיד. אי אפשר להשבית את עצמך.\n\n**הרשאה:** מנהל מוסד (תלמידי המוסד), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המשתמש",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "המשתמש עודכן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/users/{id}/approve": {
+      "patch": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "אישור תלמיד שנרשם",
+        "description": "\n\n**הרשאה:** מנהל מוסד (תלמידי המוסד), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה התלמיד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "התלמיד אושר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/users/{id}/reject": {
+      "patch": {
+        "tags": [
+          "משתמשים"
+        ],
+        "summary": "דחיית תלמיד שנרשם",
+        "description": "אפשר לדחות רק תלמיד שממתין לאישור.\n\n**הרשאה:** מנהל מוסד (תלמידי המוסד), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה התלמיד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ההרשמה נדחתה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/job-roles": {
+      "get": {
+        "tags": [
+          "תחומי תפקיד"
+        ],
+        "summary": "תחומי התפקיד של המוסד",
+        "description": "תלמיד רואה רק תחומים פעילים. מנהל ראשי חייב לשלוח institutionId.\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "in": "query",
+            "required": false,
+            "description": "למנהלים: לכלול גם תחומים לא פעילים",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "institutionId",
+            "in": "query",
+            "required": false,
+            "description": "למנהל ראשי — חובה",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת תחומי תפקיד",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/JobRole"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "תחומי תפקיד"
+        ],
+        "summary": "יצירת תחום תפקיד",
+        "description": "\n\n**הרשאה:** מנהל מוסד (במוסד שלו), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateJobRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "נוצר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobRole": {
+                      "$ref": "#/components/schemas/JobRole"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/job-roles/{id}": {
+      "patch": {
+        "tags": [
+          "תחומי תפקיד"
+        ],
+        "summary": "עריכת תחום תפקיד או הפיכתו ללא פעיל",
+        "description": "לא מוחקים תחום תפקיד — הופכים אותו ללא פעיל, כך שהמועמדויות הקיימות נשמרות.\n\n**הרשאה:** מנהל מוסד (במוסד שלו), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה תחום התפקיד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateJobRoleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "עודכן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobRole": {
+                      "$ref": "#/components/schemas/JobRole"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/statuses": {
+      "get": {
+        "tags": [
+          "סטטוסים"
+        ],
+        "summary": "סטטוסים בסיסיים + סטטוסים של המוסד",
+        "description": "ממוינים לפי sortOrder. תלמיד רואה רק סטטוסים פעילים.\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "includeInactive",
+            "in": "query",
+            "required": false,
+            "description": "למנהלים: לכלול גם סטטוסים לא פעילים",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "institutionId",
+            "in": "query",
+            "required": false,
+            "description": "למנהל ראשי: להציג גם את הסטטוסים של מוסד מסוים",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת סטטוסים",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Status"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "סטטוסים"
+        ],
+        "summary": "יצירת סטטוס למוסד",
+        "description": "\n\n**הרשאה:** מנהל מוסד (במוסד שלו), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "נוצר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "$ref": "#/components/schemas/Status"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/statuses/{id}": {
+      "patch": {
+        "tags": [
+          "סטטוסים"
+        ],
+        "summary": "עריכת סטטוס של מוסד",
+        "description": "סטטוס בסיסי אינו ניתן לשינוי (403, קוד BASE_STATUS_READONLY).\n\n**הרשאה:** מנהל מוסד (במוסד שלו), מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הסטטוס",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "עודכן",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "$ref": "#/components/schemas/Status"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          }
+        }
+      }
+    },
+    "/api/applications": {
+      "get": {
+        "tags": [
+          "מועמדויות"
+        ],
+        "summary": "רשימת מועמדויות עם חיפוש, סינון ומיון",
+        "description": "תלמיד רואה רק את המועמדויות שלו, מנהל מוסד — של המוסד שלו, מנהל ראשי — את כולן.\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "חיפוש בשם החברה ובשם המשרה",
+            "schema": {
+              "type": "string"
+            },
+            "example": "react"
+          },
+          {
+            "name": "statusId",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי סטטוס",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "interestLevel",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי רמת עניין",
+            "schema": {
+              "$ref": "#/components/schemas/InterestLevel"
+            }
+          },
+          {
+            "name": "jobRoleId",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי תחום תפקיד",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "isOpen",
+            "in": "query",
+            "required": false,
+            "description": "true = תהליכים פתוחים בלבד, false = סגורים בלבד",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי תלמיד (מנהלים בלבד)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "institutionId",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי מוסד (מנהל ראשי)",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "description": "שדה המיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "submittedOn",
+                "companyName",
+                "updatedAt",
+                "interestLevel"
+              ],
+              "default": "submittedOn"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "description": "כיוון המיון",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "מספר העמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "כמה פריטים בעמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת מועמדויות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items",
+                    "page",
+                    "pageSize",
+                    "total",
+                    "totalPages"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApplicationSummary"
+                      }
+                    },
+                    "page": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "pageSize": {
+                      "type": "integer",
+                      "example": 20
+                    },
+                    "total": {
+                      "type": "integer",
+                      "example": 1
+                    },
+                    "totalPages": {
+                      "type": "integer",
+                      "example": 1
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "מועמדויות"
+        ],
+        "summary": "הוספת מועמדות",
+        "description": "תלמיד מוסיף לעצמו. מנהל חייב לשלוח userId של תלמיד במוסד שלו — והתלמיד יקבל התראה.\n\nהתשובה כוללת suggestedAction — צעד הבא מוצע לפי הסטטוס.\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApplicationRequest"
+              },
+              "example": {
+                "companyName": "חברה א׳",
+                "jobTitle": "מפתח React מתחיל",
+                "submittedOn": "2026-10-01",
+                "statusId": 1,
+                "jobRoleId": 1,
+                "interestLevel": "HIGH",
+                "jobUrl": "https://example.com/jobs/1",
+                "contactName": "משה לוי"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "המועמדות נוספה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "application": {
+                      "$ref": "#/components/schemas/ApplicationDetail"
+                    },
+                    "suggestedAction": {
+                      "$ref": "#/components/schemas/Suggestion"
+                    }
+                  }
+                },
+                "example": {
+                  "application": {
+                    "id": 101,
+                    "user": {
+                      "id": 3,
+                      "fullName": "דנה כהן"
+                    },
+                    "createdBy": {
+                      "id": 3,
+                      "fullName": "דנה כהן"
+                    },
+                    "companyName": "חברה א׳",
+                    "jobTitle": "מפתח React מתחיל",
+                    "jobRole": {
+                      "id": 1,
+                      "name": "תכנות"
+                    },
+                    "submittedOn": "2026-10-01",
+                    "status": {
+                      "id": 3,
+                      "name": "נקבע ראיון",
+                      "isFinal": false
+                    },
+                    "jobUrl": "https://example.com/jobs/1",
+                    "contactName": "משה לוי",
+                    "interestLevel": "HIGH",
+                    "jobAttractions": "צוות קטן ואפשרויות למידה",
+                    "pointsToClarify": "האם יש עבודה מהבית",
+                    "notes": null,
+                    "interviewAt": "2026-10-21T07:00:00.000Z",
+                    "interviewLocation": "רחוב הדוגמה 1, תל אביב",
+                    "interviewPreparation": "לחזור על פרויקט הגמר",
+                    "interviewQuestions": "איך נראה יום עבודה?",
+                    "actions": [
+                      {
+                        "id": 12,
+                        "applicationId": 101,
+                        "title": "להתכונן לראיון",
+                        "dueOn": "2026-10-20",
+                        "status": "OPEN",
+                        "notes": null,
+                        "completedAt": null,
+                        "createdById": 3,
+                        "createdAt": "2026-10-19T08:00:00.000Z",
+                        "updatedAt": "2026-10-19T08:00:00.000Z"
+                      }
+                    ],
+                    "createdAt": "2026-10-01T08:00:00.000Z",
+                    "updatedAt": "2026-10-19T08:00:00.000Z"
+                  },
+                  "suggestedAction": {
+                    "title": "לבצע מעקב אחרי קורות החיים",
+                    "dueOn": "2026-10-26"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/applications/{id}": {
+      "get": {
+        "tags": [
+          "מועמדויות"
+        ],
+        "summary": "פרטי מועמדות כולל פעולות",
+        "description": "מועמדות של משתמש אחר מחזירה 404.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המועמדות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "פרטי המועמדות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "application": {
+                      "$ref": "#/components/schemas/ApplicationDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "מועמדויות"
+        ],
+        "summary": "עריכת מועמדות ושינוי סטטוס",
+        "description": "עדכון חלקי. אם הסטטוס השתנה — מוחזר suggestedAction, ואם מנהל ביצע את השינוי — התלמיד מקבל התראה.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המועמדות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateApplicationRequest"
+              },
+              "example": {
+                "statusId": 3,
+                "interviewAt": "2026-10-21T10:00:00+03:00"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "המועמדות עודכנה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "application": {
+                      "$ref": "#/components/schemas/ApplicationDetail"
+                    },
+                    "statusChanged": {
+                      "type": "boolean"
+                    },
+                    "suggestedAction": {
+                      "$ref": "#/components/schemas/Suggestion"
+                    }
+                  }
+                },
+                "example": {
+                  "application": {
+                    "id": 101,
+                    "user": {
+                      "id": 3,
+                      "fullName": "דנה כהן"
+                    },
+                    "createdBy": {
+                      "id": 3,
+                      "fullName": "דנה כהן"
+                    },
+                    "companyName": "חברה א׳",
+                    "jobTitle": "מפתח React מתחיל",
+                    "jobRole": {
+                      "id": 1,
+                      "name": "תכנות"
+                    },
+                    "submittedOn": "2026-10-01",
+                    "status": {
+                      "id": 3,
+                      "name": "נקבע ראיון",
+                      "isFinal": false
+                    },
+                    "jobUrl": "https://example.com/jobs/1",
+                    "contactName": "משה לוי",
+                    "interestLevel": "HIGH",
+                    "jobAttractions": "צוות קטן ואפשרויות למידה",
+                    "pointsToClarify": "האם יש עבודה מהבית",
+                    "notes": null,
+                    "interviewAt": "2026-10-21T07:00:00.000Z",
+                    "interviewLocation": "רחוב הדוגמה 1, תל אביב",
+                    "interviewPreparation": "לחזור על פרויקט הגמר",
+                    "interviewQuestions": "איך נראה יום עבודה?",
+                    "actions": [
+                      {
+                        "id": 12,
+                        "applicationId": 101,
+                        "title": "להתכונן לראיון",
+                        "dueOn": "2026-10-20",
+                        "status": "OPEN",
+                        "notes": null,
+                        "completedAt": null,
+                        "createdById": 3,
+                        "createdAt": "2026-10-19T08:00:00.000Z",
+                        "updatedAt": "2026-10-19T08:00:00.000Z"
+                      }
+                    ],
+                    "createdAt": "2026-10-01T08:00:00.000Z",
+                    "updatedAt": "2026-10-19T08:00:00.000Z"
+                  },
+                  "statusChanged": true,
+                  "suggestedAction": {
+                    "title": "להתכונן לראיון",
+                    "dueOn": "2026-10-20"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "מועמדויות"
+        ],
+        "summary": "מחיקת מועמדות",
+        "description": "מוחק גם את הפעולות וההתראות של המועמדות.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המועמדות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "נמחקה"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/applications/{id}/actions": {
+      "get": {
+        "tags": [
+          "פעולות"
+        ],
+        "summary": "פעולות של מועמדות",
+        "description": "פעולות פתוחות קודם, לפי תאריך יעד.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המועמדות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "סינון לפי מצב",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "DONE"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת פעולות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Action"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "פעולות"
+        ],
+        "summary": "הוספת פעולה למועמדות",
+        "description": "כאן שולחים גם את הצעד המוצע אחרי שהמשתמש אישר אותו. אם מנהל הוסיף — התלמיד מקבל התראה.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה המועמדות",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "הפעולה נוספה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "$ref": "#/components/schemas/Action"
+                    }
+                  }
+                },
+                "example": {
+                  "action": {
+                    "id": 12,
+                    "applicationId": 101,
+                    "title": "להתכונן לראיון",
+                    "dueOn": "2026-10-20",
+                    "status": "OPEN",
+                    "notes": null,
+                    "completedAt": null,
+                    "createdById": 3,
+                    "createdAt": "2026-10-19T08:00:00.000Z",
+                    "updatedAt": "2026-10-19T08:00:00.000Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/actions/{id}": {
+      "patch": {
+        "tags": [
+          "פעולות"
+        ],
+        "summary": "עריכת פעולה או סימון כבוצעה",
+        "description": "שליחת { \"status\": \"DONE\" } מסמנת כבוצעה ושומרת completedAt. { \"status\": \"OPEN\" } פותחת מחדש.\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעולה",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateActionRequest"
+              },
+              "example": {
+                "status": "DONE"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "הפעולה עודכנה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "$ref": "#/components/schemas/Action"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "פעולות"
+        ],
+        "summary": "מחיקת פעולה",
+        "description": "\n\n**הרשאה:** בעל המועמדות, מנהל המוסד, מנהל ראשי",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה הפעולה",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "נמחקה"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/dashboard": {
+      "get": {
+        "tags": [
+          "מסך הבית"
+        ],
+        "summary": "נתוני מסך הבית",
+        "description": "פעולות באיחור / להיום / בקרוב, ראיונות קרובים ומועמדויות שצריך לקבוע להן צעד הבא.\n\n**הרשאה:** כל משתמש מחובר. userId — למנהלים בלבד",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "מנהלים: להציג את מסך הבית של תלמיד מסוים",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "נתוני מסך הבית",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Dashboard"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "התראות"
+        ],
+        "summary": "ההתראות שלי",
+        "description": "מהחדשה לישנה.\n\n**הרשאה:** כל משתמש מחובר — רק ההתראות שלו",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "unreadOnly",
+            "in": "query",
+            "required": false,
+            "description": "true = רק התראות שלא נקראו",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "מספר העמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "כמה פריטים בעמוד",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "רשימת התראות",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "type": "object",
+                      "required": [
+                        "items",
+                        "page",
+                        "pageSize",
+                        "total",
+                        "totalPages"
+                      ],
+                      "properties": {
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/Notification"
+                          }
+                        },
+                        "page": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "pageSize": {
+                          "type": "integer",
+                          "example": 20
+                        },
+                        "total": {
+                          "type": "integer",
+                          "example": 1
+                        },
+                        "totalPages": {
+                          "type": "integer",
+                          "example": 1
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "unreadCount": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "התראות"
+        ],
+        "summary": "מספר ההתראות שלא נקראו",
+        "description": "\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "מספר",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "count": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/notifications/{id}/read": {
+      "patch": {
+        "tags": [
+          "התראות"
+        ],
+        "summary": "סימון התראה כנקראה",
+        "description": "\n\n**הרשאה:** מקבל ההתראה בלבד",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "מזהה ההתראה",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "example": 1
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "סומנה",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notification": {
+                      "$ref": "#/components/schemas/Notification"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/notifications/read-all": {
+      "patch": {
+        "tags": [
+          "התראות"
+        ],
+        "summary": "סימון כל ההתראות כנקראו",
+        "description": "\n\n**הרשאה:** כל משתמש מחובר",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "כמה התראות עודכנו",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer"
+                    }
+                  }
+                },
+                "example": {
+                  "updated": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "ה־Token שמתקבל מ־POST /api/auth/login"
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "ולידציה נכשלה",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "הנתונים שנשלחו אינם תקינים",
+                "details": [
+                  {
+                    "field": "companyName",
+                    "message": "שדה חובה"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "אין Token, Token לא תקין או שפג תוקפו (קודים: UNAUTHORIZED, INVALID_TOKEN, TOKEN_EXPIRED, INVALID_CREDENTIALS)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "UNAUTHORIZED",
+                "message": "נדרשת התחברות. יש לשלוח Authorization: Bearer <token>"
+              }
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "אין הרשאה לפעולה",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "FORBIDDEN",
+                "message": "אין לך הרשאה לבצע פעולה זו"
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "לא נמצא, או שייך למשתמש / מוסד אחר",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "NOT_FOUND",
+                "message": "הפריט המבוקש לא נמצא"
+              }
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "כפילות או מצב שאינו מאפשר את הפעולה",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": {
+                "code": "EMAIL_TAKEN",
+                "message": "כתובת הדוא״ל כבר רשומה במערכת"
+              }
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "VALIDATION_ERROR"
+              },
+              "message": {
+                "type": "string",
+                "example": "הנתונים שנשלחו אינם תקינים"
+              },
+              "details": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "field": {
+                      "type": "string",
+                      "example": "companyName"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "שדה חובה"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "Role": {
+        "type": "string",
+        "enum": [
+          "SUPER_ADMIN",
+          "INSTITUTION_ADMIN",
+          "STUDENT"
+        ]
+      },
+      "ApprovalStatus": {
+        "type": "string",
+        "enum": [
+          "PENDING",
+          "APPROVED",
+          "REJECTED"
+        ]
+      },
+      "InterestLevel": {
+        "type": "string",
+        "enum": [
+          "LOW",
+          "MEDIUM",
+          "HIGH"
+        ],
+        "description": "נמוכה / בינונית / גבוהה"
+      },
+      "Ref": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "מכללת אופק"
+          }
+        }
+      },
+      "UserRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 3
+          },
+          "fullName": {
+            "type": "string",
+            "example": "דנה כהן"
+          }
+        }
+      },
+      "StatusRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 3
+          },
+          "name": {
+            "type": "string",
+            "example": "נקבע ראיון"
+          },
+          "isFinal": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "ApplicationRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 101
+          },
+          "companyName": {
+            "type": "string",
+            "example": "חברה א׳"
+          },
+          "jobTitle": {
+            "type": "string",
+            "example": "מפתח React מתחיל"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserRef"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "fullName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role"
+          },
+          "approvalStatus": {
+            "$ref": "#/components/schemas/ApprovalStatus"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "institution": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "nullable": true
+          },
+          "desiredJobRoles": {
+            "type": "array",
+            "description": "התחומים שהתלמיד מחפש בהם עבודה (למנהלים — מערך ריק)",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "isActive": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          "approvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 3,
+          "fullName": "דנה כהן",
+          "email": "dana@example.com",
+          "role": "STUDENT",
+          "approvalStatus": "APPROVED",
+          "isActive": true,
+          "institution": {
+            "id": 1,
+            "name": "מכללת אופק"
+          },
+          "desiredJobRoles": [
+            {
+              "id": 1,
+              "name": "תכנות",
+              "isActive": true
+            }
+          ],
+          "approvedAt": "2026-10-01T08:00:00.000Z",
+          "createdAt": "2026-10-01T07:00:00.000Z"
+        }
+      },
+      "Institution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "contactEmail": {
+            "type": "string",
+            "format": "email",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 1,
+          "name": "מכללת אופק",
+          "city": "ירושלים",
+          "contactEmail": "office@ofek.example.com",
+          "createdAt": "2026-09-01T08:00:00.000Z",
+          "updatedAt": "2026-09-01T08:00:00.000Z"
+        }
+      },
+      "PublicInstitution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "name": {
+            "type": "string",
+            "example": "מכללת אופק"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "example": "ירושלים"
+          }
+        }
+      },
+      "InstitutionWithCounts": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Institution"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "adminsCount": {
+                "type": "integer",
+                "example": 1
+              },
+              "studentsCount": {
+                "type": "integer",
+                "example": 12
+              }
+            }
+          }
+        ]
+      },
+      "JobRole": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "institutionId": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 1,
+          "institutionId": 1,
+          "name": "תכנות",
+          "isActive": true,
+          "createdAt": "2026-09-01T08:00:00.000Z",
+          "updatedAt": "2026-09-01T08:00:00.000Z"
+        }
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isBase": {
+            "type": "boolean",
+            "description": "true = סטטוס בסיסי שאי אפשר לשנות"
+          },
+          "institutionId": {
+            "type": "integer",
+            "nullable": true
+          },
+          "isFinal": {
+            "type": "boolean",
+            "description": "האם הסטטוס מסיים את התהליך"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "nullable": true
+          },
+          "suggestedDays": {
+            "type": "integer",
+            "nullable": true
+          },
+          "sortOrder": {
+            "type": "integer"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "example": {
+          "id": 3,
+          "name": "נקבע ראיון",
+          "isBase": true,
+          "institutionId": null,
+          "isFinal": false,
+          "suggestedAction": "להתכונן לראיון",
+          "suggestedDays": 1,
+          "sortOrder": 30,
+          "isActive": true
+        }
+      },
+      "Suggestion": {
+        "type": "object",
+        "nullable": true,
+        "description": "צעד הבא מוצע לפי הסטטוס. השרת אינו יוצר את הפעולה — הלקוח שולח POST אם המשתמש מאשר",
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "להתכונן לראיון"
+          },
+          "dueOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-20"
+          }
+        }
+      },
+      "Action": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "applicationId": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "dueOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "DONE"
+            ]
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdById": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 12,
+          "applicationId": 101,
+          "title": "להתכונן לראיון",
+          "dueOn": "2026-10-20",
+          "status": "OPEN",
+          "notes": null,
+          "completedAt": null,
+          "createdById": 3,
+          "createdAt": "2026-10-19T08:00:00.000Z",
+          "updatedAt": "2026-10-19T08:00:00.000Z"
+        }
+      },
+      "ActionWithApplication": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Action"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "application": {
+                "$ref": "#/components/schemas/ApplicationRef"
+              }
+            }
+          }
+        ]
+      },
+      "ApplicationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "companyName": {
+            "type": "string"
+          },
+          "jobTitle": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusRef"
+          },
+          "jobRole": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "nullable": true
+          },
+          "interestLevel": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/InterestLevel"
+              }
+            ],
+            "nullable": true
+          },
+          "submittedOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "interviewAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "nextAction": {
+            "type": "object",
+            "nullable": true,
+            "description": "הפעולה הפתוחה הקרובה ביותר",
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "title": {
+                "type": "string"
+              },
+              "dueOn": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          },
+          "openActionsCount": {
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 101,
+          "companyName": "חברה א׳",
+          "jobTitle": "מפתח React מתחיל",
+          "status": {
+            "id": 3,
+            "name": "נקבע ראיון",
+            "isFinal": false
+          },
+          "jobRole": {
+            "id": 1,
+            "name": "תכנות"
+          },
+          "interestLevel": "HIGH",
+          "submittedOn": "2026-10-01",
+          "interviewAt": "2026-10-21T07:00:00.000Z",
+          "nextAction": {
+            "id": 12,
+            "title": "להתכונן לראיון",
+            "dueOn": "2026-10-20"
+          },
+          "openActionsCount": 1,
+          "user": {
+            "id": 3,
+            "fullName": "דנה כהן"
+          },
+          "updatedAt": "2026-10-19T08:00:00.000Z"
+        }
+      },
+      "ApplicationDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "createdBy": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "companyName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "חברה א׳"
+          },
+          "jobTitle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "מפתח React מתחיל"
+          },
+          "submittedOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-01",
+            "description": "לא יכול להיות בעתיד"
+          },
+          "statusId": {
+            "type": "integer",
+            "example": 1,
+            "description": "סטטוס פעיל — בסיסי או של המוסד"
+          },
+          "jobRoleId": {
+            "type": "integer",
+            "nullable": true,
+            "example": 1,
+            "description": "תחום תפקיד פעיל של המוסד"
+          },
+          "jobUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "example": "https://example.com/jobs/1",
+            "description": "מתחיל ב־http:// או https://"
+          },
+          "contactName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "example": "משה לוי"
+          },
+          "interestLevel": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ],
+            "nullable": true,
+            "example": "HIGH"
+          },
+          "jobAttractions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "צוות קטן ואפשרויות למידה"
+          },
+          "pointsToClarify": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "האם יש עבודה מהבית"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T10:00:00+03:00"
+          },
+          "interviewLocation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "example": "רחוב הדוגמה 1, תל אביב"
+          },
+          "interviewPreparation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewQuestions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "jobRole": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Ref"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatusRef"
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Action"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 101,
+          "user": {
+            "id": 3,
+            "fullName": "דנה כהן"
+          },
+          "createdBy": {
+            "id": 3,
+            "fullName": "דנה כהן"
+          },
+          "companyName": "חברה א׳",
+          "jobTitle": "מפתח React מתחיל",
+          "jobRole": {
+            "id": 1,
+            "name": "תכנות"
+          },
+          "submittedOn": "2026-10-01",
+          "status": {
+            "id": 3,
+            "name": "נקבע ראיון",
+            "isFinal": false
+          },
+          "jobUrl": "https://example.com/jobs/1",
+          "contactName": "משה לוי",
+          "interestLevel": "HIGH",
+          "jobAttractions": "צוות קטן ואפשרויות למידה",
+          "pointsToClarify": "האם יש עבודה מהבית",
+          "notes": null,
+          "interviewAt": "2026-10-21T07:00:00.000Z",
+          "interviewLocation": "רחוב הדוגמה 1, תל אביב",
+          "interviewPreparation": "לחזור על פרויקט הגמר",
+          "interviewQuestions": "איך נראה יום עבודה?",
+          "actions": [
+            {
+              "id": 12,
+              "applicationId": 101,
+              "title": "להתכונן לראיון",
+              "dueOn": "2026-10-20",
+              "status": "OPEN",
+              "notes": null,
+              "completedAt": null,
+              "createdById": 3,
+              "createdAt": "2026-10-19T08:00:00.000Z",
+              "updatedAt": "2026-10-19T08:00:00.000Z"
+            }
+          ],
+          "createdAt": "2026-10-01T08:00:00.000Z",
+          "updatedAt": "2026-10-19T08:00:00.000Z"
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "APPLICATION_CREATED",
+              "STATUS_CHANGED",
+              "ACTION_ADDED"
+            ]
+          },
+          "isRead": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "nullable": true
+          },
+          "suggestedDueOn": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "application": {
+            "$ref": "#/components/schemas/ApplicationRef"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/UserRef"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "example": {
+          "id": 5,
+          "type": "STATUS_CHANGED",
+          "isRead": false,
+          "title": "עדכון במועמדות שלך",
+          "message": "רונית מנהלת עדכן/ה את המועמדות שלך לתפקיד \"מפתח React מתחיל\" בחברה \"חברה א׳\". סטטוס חדש: נקבע ראיון",
+          "suggestedAction": "להתכונן לראיון",
+          "suggestedDueOn": "2026-10-20",
+          "application": {
+            "id": 101,
+            "companyName": "חברה א׳",
+            "jobTitle": "מפתח React מתחיל"
+          },
+          "actor": {
+            "id": 2,
+            "fullName": "רונית מנהלת"
+          },
+          "createdAt": "2026-10-19T08:00:00.000Z"
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "JWT Access Token"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "example": {
+          "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+          "user": {
+            "id": 3,
+            "fullName": "דנה כהן",
+            "email": "dana@example.com",
+            "role": "STUDENT",
+            "approvalStatus": "APPROVED",
+            "isActive": true,
+            "institution": {
+              "id": 1,
+              "name": "מכללת אופק"
+            },
+            "desiredJobRoles": [
+              {
+                "id": 1,
+                "name": "תכנות",
+                "isActive": true
+              }
+            ],
+            "approvedAt": "2026-10-01T08:00:00.000Z",
+            "createdAt": "2026-10-01T07:00:00.000Z"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "required": [
+          "fullName",
+          "email",
+          "password",
+          "institutionId"
+        ],
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "נועה ישראלי"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "noa@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 72,
+            "description": "לפחות 8 תווים, אות אחת וספרה אחת",
+            "example": "Noa12345!"
+          },
+          "institutionId": {
+            "type": "integer",
+            "example": 1
+          },
+          "jobRoleIds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "description": "רשות: התחומים שהתלמיד מחפש בהם עבודה, מתוך GET /api/institutions/{id}/job-roles",
+            "example": [
+              1,
+              2
+            ]
+          }
+        }
+      },
+      "UpdateMyJobRolesRequest": {
+        "type": "object",
+        "required": [
+          "jobRoleIds"
+        ],
+        "properties": {
+          "jobRoleIds": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 20,
+            "description": "הרשימה המלאה של התחומים — מחליפה את הקודמת. מערך ריק מוחק את כולם",
+            "example": [
+              1,
+              3
+            ]
+          }
+        }
+      },
+      "LoginRequest": {
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "dana@example.com"
+          },
+          "password": {
+            "type": "string",
+            "example": "Student1234!"
+          }
+        }
+      },
+      "CreateInstitutionRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "מכללת אופק"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80,
+            "example": "ירושלים"
+          },
+          "contactEmail": {
+            "type": "string",
+            "format": "email",
+            "nullable": true,
+            "maxLength": 255,
+            "example": "office@ofek.example.com"
+          }
+        }
+      },
+      "UpdateInstitutionRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "description": "עדכון חלקי — שולחים רק את השדות שהשתנו. ערך null מוחק עיר או דוא״ל",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "מכללת אופק"
+          },
+          "city": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 80,
+            "example": "ירושלים"
+          },
+          "contactEmail": {
+            "type": "string",
+            "format": "email",
+            "nullable": true,
+            "maxLength": 255,
+            "example": "office@ofek.example.com"
+          }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "required": [
+          "fullName",
+          "email",
+          "password",
+          "institutionId"
+        ],
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "רונית מנהלת"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "ronit@example.com"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "example": "Ronit1234!"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "INSTITUTION_ADMIN",
+              "STUDENT"
+            ],
+            "default": "INSTITUTION_ADMIN"
+          },
+          "institutionId": {
+            "type": "integer",
+            "example": 1
+          }
+        }
+      },
+      "UpdateUserRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "example": "דנה כהן-לוי"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CreateJobRoleRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "example": "תכנות"
+          },
+          "institutionId": {
+            "type": "integer",
+            "description": "חובה למנהל ראשי בלבד",
+            "example": 1
+          }
+        }
+      },
+      "UpdateJobRoleRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 80,
+            "example": "פיתוח תוכנה"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CreateStatusRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60,
+            "example": "ראיון שני"
+          },
+          "isFinal": {
+            "type": "boolean",
+            "default": false
+          },
+          "suggestedAction": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200,
+            "example": "להתכונן לראיון השני"
+          },
+          "suggestedDays": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 60,
+            "example": 1,
+            "description": "ברירת מחדל 3 כשיש צעד מוצע"
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 100,
+            "example": 35
+          },
+          "institutionId": {
+            "type": "integer",
+            "description": "חובה למנהל ראשי בלבד",
+            "example": 1
+          }
+        }
+      },
+      "UpdateStatusRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 60
+          },
+          "isFinal": {
+            "type": "boolean"
+          },
+          "suggestedAction": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "suggestedDays": {
+            "type": "integer",
+            "nullable": true,
+            "minimum": 0,
+            "maximum": 60
+          },
+          "sortOrder": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "CreateApplicationRequest": {
+        "type": "object",
+        "required": [
+          "companyName",
+          "jobTitle",
+          "submittedOn",
+          "statusId"
+        ],
+        "properties": {
+          "companyName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "חברה א׳"
+          },
+          "jobTitle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "מפתח React מתחיל"
+          },
+          "submittedOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-01",
+            "description": "לא יכול להיות בעתיד"
+          },
+          "statusId": {
+            "type": "integer",
+            "example": 1,
+            "description": "סטטוס פעיל — בסיסי או של המוסד"
+          },
+          "jobRoleId": {
+            "type": "integer",
+            "nullable": true,
+            "example": 1,
+            "description": "תחום תפקיד פעיל של המוסד"
+          },
+          "jobUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "example": "https://example.com/jobs/1",
+            "description": "מתחיל ב־http:// או https://"
+          },
+          "contactName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "example": "משה לוי"
+          },
+          "interestLevel": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ],
+            "nullable": true,
+            "example": "HIGH"
+          },
+          "jobAttractions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "צוות קטן ואפשרויות למידה"
+          },
+          "pointsToClarify": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "האם יש עבודה מהבית"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T10:00:00+03:00"
+          },
+          "interviewLocation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "example": "רחוב הדוגמה 1, תל אביב"
+          },
+          "interviewPreparation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewQuestions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "userId": {
+            "type": "integer",
+            "description": "חובה למנהלים: התלמיד שעבורו נוצרת המועמדות. תלמיד אינו שולח שדה זה",
+            "example": 3
+          }
+        }
+      },
+      "UpdateApplicationRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "description": "עדכון חלקי — שולחים רק את השדות שהשתנו. ערך null מוחק שדה רשות",
+        "properties": {
+          "companyName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "חברה א׳"
+          },
+          "jobTitle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120,
+            "example": "מפתח React מתחיל"
+          },
+          "submittedOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-01",
+            "description": "לא יכול להיות בעתיד"
+          },
+          "statusId": {
+            "type": "integer",
+            "example": 1,
+            "description": "סטטוס פעיל — בסיסי או של המוסד"
+          },
+          "jobRoleId": {
+            "type": "integer",
+            "nullable": true,
+            "example": 1,
+            "description": "תחום תפקיד פעיל של המוסד"
+          },
+          "jobUrl": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 500,
+            "example": "https://example.com/jobs/1",
+            "description": "מתחיל ב־http:// או https://"
+          },
+          "contactName": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 100,
+            "example": "משה לוי"
+          },
+          "interestLevel": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH"
+            ],
+            "nullable": true,
+            "example": "HIGH"
+          },
+          "jobAttractions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "צוות קטן ואפשרויות למידה"
+          },
+          "pointsToClarify": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000,
+            "example": "האם יש עבודה מהבית"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-10-21T10:00:00+03:00"
+          },
+          "interviewLocation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "example": "רחוב הדוגמה 1, תל אביב"
+          },
+          "interviewPreparation": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          },
+          "interviewQuestions": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 5000
+          }
+        }
+      },
+      "CreateActionRequest": {
+        "type": "object",
+        "required": [
+          "title",
+          "dueOn"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "example": "להתכונן לראיון"
+          },
+          "dueOn": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-20"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          }
+        }
+      },
+      "UpdateActionRequest": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "dueOn": {
+            "type": "string",
+            "format": "date"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 2000
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "OPEN",
+              "DONE"
+            ],
+            "example": "DONE"
+          }
+        }
+      },
+      "Dashboard": {
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "התאריך של היום לפי שעון ישראל"
+          },
+          "overdue": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionWithApplication"
+            },
+            "description": "פעולות פתוחות שתאריך היעד שלהן עבר"
+          },
+          "dueToday": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionWithApplication"
+            }
+          },
+          "upcoming": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionWithApplication"
+            },
+            "description": "7 הימים הקרובים"
+          },
+          "upcomingInterviews": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationRef"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "interviewAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "interviewLocation": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "needsNextStep": {
+            "type": "array",
+            "description": "מועמדויות פתוחות שאין להן אף פעולה פתוחה",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/ApplicationRef"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "$ref": "#/components/schemas/StatusRef"
+                    },
+                    "updatedAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "unreadNotifications": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}
